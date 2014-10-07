@@ -538,9 +538,10 @@ module Spree
 
     def restart_checkout_flow
       self.update_columns(
-        state: checkout_steps.first,
+        state: 'cart',
         updated_at: Time.now,
       )
+      self.next! if self.line_items.size > 0
     end
 
     def refresh_shipment_rates
