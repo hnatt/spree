@@ -9,6 +9,7 @@ describe Spree::Core::ControllerHelpers::Order, type: :controller do
 
   let(:user) { create(:user) }
   let(:order) { create(:order, user: user) }
+  let(:store) { create(:store) }
 
   describe '#simple_current_order' do
     before { controller.stub(try_spree_current_user: user) }
@@ -24,6 +25,7 @@ describe Spree::Core::ControllerHelpers::Order, type: :controller do
   describe '#current_order' do
     before {
       Spree::Order.destroy_all # TODO data is leaking between specs as database_cleaner or rspec 3 was broken in Rails 4.1.6 & 4.0.10
+      controller.stub(current_store: store)
       controller.stub(try_spree_current_user: user)
     }
     context 'create_order_if_necessary option is false' do
@@ -37,6 +39,11 @@ describe Spree::Core::ControllerHelpers::Order, type: :controller do
         expect {
           controller.current_order(create_order_if_necessary: true)
         }.to change(Spree::Order, :count).to(1)
+      end
+
+      it 'assigns the current_store id' do
+        controller.current_order(create_order_if_necessary: true)
+        expect(Spree::Order.last.store_id).to eq store.id
       end
     end
   end
@@ -61,19 +68,14 @@ describe Spree::Core::ControllerHelpers::Order, type: :controller do
   end
 
   describe '#set_current_order' do
-    let(:incomplete_order) { create(:order) }
+    let(:incomplete_order) { create(:order, user: user) }
     before { controller.stub(try_spree_current_user: user) }
-    context 'when logged in user' do
-      before { controller.stub(last_incomplete_order: incomplete_order) }
-      it 'sends guest_token cookie to user' do
-        controller.set_current_order
-        expect(cookies.permanent.signed[:guest_token]).to eq incomplete_order.guest_token
-      end
-    end
-    context 'when current order not equal last imcomplete order' do
+
+    context 'when current order not equal to users incomplete orders' do
       before { controller.stub(current_order: order, last_incomplete_order: incomplete_order, cookies: double(signed: { guest_token: 'guest_token' })) }
+
       it 'calls Spree::Order#merge! method' do
-        Spree::Order.any_instance.should_receive(:merge!)
+        expect(order).to receive(:merge!).with(incomplete_order, user)
         controller.set_current_order
       end
     end

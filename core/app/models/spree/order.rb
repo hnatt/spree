@@ -28,10 +28,12 @@ module Spree
       belongs_to :user, class_name: Spree.user_class.to_s
       belongs_to :created_by, class_name: Spree.user_class.to_s
       belongs_to :approver, class_name: Spree.user_class.to_s
+      belongs_to :canceler, class_name: Spree.user_class.to_s
     else
       belongs_to :user
       belongs_to :created_by
       belongs_to :approver
+      belongs_to :canceler
     end
 
     belongs_to :bill_address, foreign_key: :bill_address_id, class_name: 'Spree::Address'
@@ -45,7 +47,7 @@ module Spree
     has_many :state_changes, as: :stateful
     has_many :line_items, -> { order('created_at ASC') }, dependent: :destroy, inverse_of: :order
     has_many :payments, dependent: :destroy
-    has_many :return_authorizations, dependent: :destroy
+    has_many :return_authorizations, dependent: :destroy, inverse_of: :order
     has_many :reimbursements, inverse_of: :order
     has_many :adjustments, -> { order("#{Adjustment.table_name}.created_at ASC") }, as: :adjustable, dependent: :destroy
     has_many :line_item_adjustments, through: :line_items, source: :adjustments
@@ -560,6 +562,16 @@ module Spree
 
     def is_risky?
       self.payments.risky.count > 0
+    end
+
+    def canceled_by(user)
+      self.transaction do
+        cancel!
+        self.update_columns(
+          canceler_id: user.id,
+          canceled_at: Time.now,
+        )
+      end
     end
 
     def approved_by(user)
